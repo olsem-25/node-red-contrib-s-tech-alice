@@ -6,26 +6,26 @@ const axios = require('axios');
 module.exports = function(RED) {
     function STechCloudConfigNode(config) {
         RED.nodes.createNode(this, config);
-	
+
 		var node = this;
 
 		const id = this.id;
-			
+
 		this.name = config.name;
 
 		const model = config.model;
 
-		var WebSocket = require('ws'); 
+		var WebSocket = require('ws');
 		const fs  = require('fs');
-		
+
 		var ws;
 
 		var configfile = "./s-tech-alice-conf.json";    // файл с конфигурацией
 
 		var tokenfile = "./s-tech-token.json";			// файл с токеном
-			
+
 		const host = node.credentials.host; // host сервиса из конфига ноды
-		const port = node.credentials.port; // port сервиса из конфига ноды	
+		const port = node.credentials.port; // port сервиса из конфига ноды
 
 		const login = node.credentials.login;   // ID пользователя
 		const password = node.credentials.password;   // пароль пользователя
@@ -52,6 +52,8 @@ module.exports = function(RED) {
 
 		var test_msg_send = false;
 
+		var normalclose = false
+
 		var DevicesInfo= {
 			request_id: "",
 			payload: {
@@ -66,7 +68,7 @@ module.exports = function(RED) {
 				devices: []
 			}
 		}
-		
+
 		var ResponceDevicesState= {
 			request_id: "",
 			payload: {
@@ -96,9 +98,9 @@ module.exports = function(RED) {
 			}
 			fs.readFile(tokenfile, {encoding: 'utf8'}, (err, data) => {
 				if (err) {
-					var wrdata = []; 
+					var wrdata = [];
 					wrdata.push({id: id, token: token});
-					wrdata = JSON.stringify(wrdata, null, 2); 
+					wrdata = JSON.stringify(wrdata, null, 2);
 					fs.writeFile(tokenfile, wrdata, { encoding: 'utf8', flag: 'w' }, function(){
 						read_token = true;
 						return;
@@ -107,7 +109,7 @@ module.exports = function(RED) {
 				else{
 					try{
 						var dt = JSON.parse(data);
-						if (typeof dt === 'object'){						
+						if (typeof dt === 'object'){
 							dt.forEach(datatok => {
 								if (datatok.id === id){
 									token = datatok.token;
@@ -121,14 +123,14 @@ module.exports = function(RED) {
 					}
 					catch{
 							node.log("С файлом токена что-то не так... Перезаписываю файл.")
-							var wrdata = []; 
+							var wrdata = [];
 							wrdata.push({id: id, token: token});
-							wrdata = JSON.stringify(wrdata, null, 2); 
+							wrdata = JSON.stringify(wrdata, null, 2);
 							fs.writeFile(tokenfile, wrdata, { encoding: 'utf8', flag: 'w' }, function(){});
 							read_token = true;
 					}
-				}					
-			});	
+				}
+			});
 		}
 
 		// Функция получения текущего времени в секундах
@@ -148,27 +150,27 @@ module.exports = function(RED) {
 			}
 			// controller_serial = "ABCDEFGH";
 			node.emit("controller_serial", controller_serial);
-			serld = true;	
+			serld = true;
 		}
 
 		const GetDeviceInfo = new Promise ((resolve, reject) => {
 			node.AddDevInfo = (data) => {
-				devicesfi.push(data);				
-				devcount = devcount - 1;	
+				devicesfi.push(data);
+				devcount = devcount - 1;
 				if (devcount < 1) {
 					resolve();
 				}
-		   	}	
+		   	}
 		});
 
 		const GetDeviceState = new Promise ((resolve, reject) => {
 			node.AddDevState = (data) => {
-				devicessti.push(data);				
-				devcountst = devcountst - 1;	
+				devicessti.push(data);
+				devcountst = devcountst - 1;
 				if (devcountst < 1) {
 					resolve();
 				}
-		   	}	
+		   	}
 		});
 
 		const SetDeviceState = new Promise ((resolve, reject) => {
@@ -189,33 +191,33 @@ module.exports = function(RED) {
 				devicesfi = [];
 				devices.forEach(function(dev){
 					node.emit("Get Info", dev, model);
-				});				
+				});
 				GetDeviceInfo
-				.then (() => {						
+				.then (() => {
 					di.request_id = RequiestID;
 					di.payload.user_id = login;
-					di.payload.devices = devicesfi; 
+					di.payload.devices = devicesfi;
 					resolve (di);
 				})
 				.catch (() => {
 					reject;
-				})				
+				})
 			})
 		}
 
-		function GetStateDevices (reqid, data){   // Функция сбора информации о состоянии устройств в облако 
+		function GetStateDevices (reqid, data){   // Функция сбора информации о состоянии устройств в облако
 			return new Promise  ((resolve, reject) => {
 				let RequiestID = reqid;
-				let dev = data;	
+				let dev = data;
 				devcountst = dev.devices.length;
 				devicessti =[];
-				dev.devices.forEach(function(devst){					
+				dev.devices.forEach(function(devst){
 					if ( devices.includes(devst.id) === false ){
 						let Resp = {};
 						Resp.id = devst.id;
-						Resp.error_code = "DEVICE_NOT_FOUND"; 
-						Resp.error_message = "The specified device was not found"; 
-						node.AddDevState (Resp);	
+						Resp.error_code = "DEVICE_NOT_FOUND";
+						Resp.error_message = "The specified device was not found";
+						node.AddDevState (Resp);
 					}
 					node.emit("Get State", devst);
 				})
@@ -228,11 +230,11 @@ module.exports = function(RED) {
 				})
 				.catch (() => {
 					reject;
-				})	
-			})	
+				})
+			})
 		}
 
-		function SetStateDevices (reqid, data){   // Функция установки состояния устройств по команде из облака 
+		function SetStateDevices (reqid, data){   // Функция установки состояния устройств по команде из облака
 			return new Promise  ((resolve, reject) => {
 				let RequiestID = reqid;
 				let dev = data;
@@ -243,10 +245,10 @@ module.exports = function(RED) {
 					if ( devices.includes(devst.id) === false ){
 						let Resp = {};
 						Resp.id = devst.id
-						Resp.action_result = { 
-							status : 'ERROR', error_code : "DEVICE_NOT_FOUND" 
-						}; 
-						node.ResponceState (Resp);						
+						Resp.action_result = {
+							status : 'ERROR', error_code : "DEVICE_NOT_FOUND"
+						};
+						node.ResponceState (Resp);
 					}
 					node.emit("Set State", devst);
 				});
@@ -261,31 +263,33 @@ module.exports = function(RED) {
 					reject;
 				})
 			})
-		}	
+		}
 
 		RED.httpAdmin.get("/STechCloudnode/api", RED.auth.needsPermission('node-red-contrib-s-tech-alice.read'), function(req, res) {
 			let out = {};
-			getserial();			
+			getserial();
 			if (controller_serial != ""){
 				out.serial = controller_serial
 				res.json(out);
 			}
 			else{
-				node.error("No serial");	
+				node.error("No serial");
 			}
 		});
-		
-		function connect() {
-			
-			node.log("Start connect to cloud..."); 
 
-			let url = "https://" + host + ":" + port + "/api/controller/websocket"; 
-			//let url = "https://s-tech-cloud.ru:8088/api/controller/websocket"; 
-			
+		function connect() {
+
+			normalclose = false;
+
+			node.log("Start connect to cloud...");
+
+			let url = "https://" + host + ":" + port + "/api/controller/websocket";
+			//let url = "https://s-tech-cloud.ru:8088/api/controller/websocket";
+
 			ws = new WebSocket(url, {
 				headers: {
 				'Authorization': token
-			}	
+			}
 			});
 
 				ws.on('open', function open() {
@@ -312,10 +316,10 @@ module.exports = function(RED) {
 								})
 								.catch (() => {
 									ws.send ({Error: "External error"});
-								})					 	
+								})
 							break;
 							case "Get Devices State":
-								node.log("Request Devices State. Requeest ID: " + inmsg.XRequestId);							
+								node.log("Request Devices State. Requeest ID: " + inmsg.XRequestId);
 								GetStateDevices (inmsg.XRequestId, inmsg.DeviceList)
 								.then ( res => {
 									ws.send (JSON.stringify(res));
@@ -328,7 +332,7 @@ module.exports = function(RED) {
 							case "Set Devices State":
 								node.log("Devices Status change request. Requeest ID: " + inmsg.XRequestId);
 								SetStateDevices (inmsg.XRequestId, inmsg.DeviceList.payload)
-								.then ( res => {	
+								.then ( res => {
 									ws.send (JSON.stringify(res));
 									node.log("Send to cloud confirmation new action devices. Requeest ID: " + res.request_id);
 								})
@@ -337,38 +341,22 @@ module.exports = function(RED) {
 								})
 							break;
 							default:
-								ws.send ({Error :"Function not found"});	
-						}					
+								ws.send ({Error :"Function not found"});
+						}
 					}
 					catch{}
 				});
 
 				ws.on('close', function close(code, reason) {
-					node.emit("offline");
-					node.log('Disconnected from ' + url);
-					node.error('Код закрытия WebSocket: ' + code.toString());
-					if (code === 1008){
-						node.log("Токен не работает. Обновляю токен.");
-						let url = "https://" + host + ":" + port + "/api/controller/create/token/update"; 
-						axios.post(url, {
-							user_id: login,
-							password: password 
-						})
-						.then(function (response) {
-							if (response.data.hasOwnProperty('jwtToken') === true){
-								node.log("Новый токен получен.");
-								token = response.data.jwtToken;
-								var wrdata = []; 
-								wrdata.push({id: id, token: token});
-								wrdata = JSON.stringify(wrdata, null, 2); 
-								fs.writeFile(tokenfile, wrdata, { encoding: 'utf8', flag: 'w' }, function(){});	
-							}	
-						})
-						.catch(function (error) {
-							node.log(error);
-						});
+					if (normalclose == false){
+						node.emit("offline");
+						node.log('Disconnected from ' + url);
+						node.error('Код закрытия WebSocket: ' + code.toString());
+						if (code === 1008){
+							node.UpdateToken();
+						}
+						setTimeout(connect, 5000); // Переподключиться через 5 секунд после разрыва связи
 					}
-					setTimeout(connect, 10000); // Переподключиться через 10 секунд после разрыва связи
 				});
 
 				ws.on('error', function (error) {
@@ -376,9 +364,31 @@ module.exports = function(RED) {
 					node.error('Ошибка WebSocket: ' + error.toString());
 				});
 		};
-		
+
+		node.UpdateToken = () =>{
+			node.log("Токен не работает. Обновляю токен.");
+			let url = "https://" + host + ":" + port + "/api/controller/create/token/update";
+			axios.post(url, {
+				user_id: login,
+				password: password
+			})
+			.then(function (response) {
+				if (response.data.hasOwnProperty('jwtToken') === true){
+					node.log("Новый токен получен.");
+					token = response.data.jwtToken;
+					var wrdata = [];
+					wrdata.push({id: id, token: token});
+					wrdata = JSON.stringify(wrdata, null, 2);
+					fs.writeFile(tokenfile, wrdata, { encoding: 'utf8', flag: 'w' }, function(){});
+				}
+			})
+			.catch(function (error) {
+				node.log(error);
+			});
+		}
+
 		node.AddDevice = (id) => {
-			devices.push(id);	 	
+			devices.push(id);
 		};
 
 		node.UpdateStateDevice = (data) =>{
@@ -401,39 +411,39 @@ module.exports = function(RED) {
 			ws.send (JSON.stringify(outmsg));
 			node.log("Cloud notification about changing device settings.");
 		}
-	
+
 		async function writeJsonFile(filePath, obj) {
 			try {
-			  const data = JSON.stringify(obj, null, 2); 
+			  const data = JSON.stringify(obj, null, 2);
 			  fs.writeFile(filePath, data, { encoding: 'utf8', flag: 'w' }, function(){});
 			  node.log('Файл конфигурации ' + configfile + ' успешно записан.');
 			} catch (error) {
 			  node.error("Ошибка при записи файла конфигурации:" + error);
 			}
 		}
-		
+
 		function CheckConfig(){
 			fs.readFile(configfile, {encoding: 'utf8'}, (err, data) => {
 				if (err) {
 					node.error('Ошибка при чтении файла конфигурации: ' + err);
 					RequestDevInfo ("Config", model)
 					.then ( res => {
-						writeJsonFile (configfile, res.payload.devices)			
+						writeJsonFile (configfile, res.payload.devices)
 					})
 					.catch (() => {
 						node.log ("не удалось собрать инфо по конфигурации")
-					})	
+					})
 					return;
 				}
 				RequestDevInfo ("Config", model)
 				.then ( res => {
 					if ( equal(res.payload.devices,JSON.parse(data)) === true ){
-						node.log ("Конфигурация не изменилась!")	
+						node.log ("Конфигурация не изменилась!")
 					}
 					else{
 						node.log ("Конфигурация изменилась!")
 						node.UpdateDevices();
-						writeJsonFile (configfile, res.payload.devices);			
+						writeJsonFile (configfile, res.payload.devices);
 					}
 				})
 				.catch (() => {
@@ -449,15 +459,15 @@ module.exports = function(RED) {
 			if (read_token === true){
 				connect();
 				clearInterval(tokenint);
-			}	
-		}, 50)		
+			}
+		}, 50)
 
 		const intrvl = setInterval(() => {
 			if (serld === true){
 				node.emit("controller_serial", controller_serial);
 				setTimeout ( function () { global.Flow_Cloud_loaded = true}, 0);
 				clearInterval(intrvl);
-			}	
+			}
 		}, 50)
 
 		const confintrvl = setInterval(() => {
@@ -483,22 +493,31 @@ module.exports = function(RED) {
 			catch{}
 		}, 120000);
 
-		node.on('close', () => {
-			ws.close(1000, 'CloseNormalClosure');
-			node.log ('Normal websocket closing')
+		node.on('close', async (done) => {
+		try {
+			if (ws && ws.readyState === WebSocket.OPEN) {
+			await new Promise((resolve, reject) => {
+				normalclose = true;
+				ws.close(1000, "Normal closure");
+				resolve();
+			});
+			node.log('Normal websocket closing');
+			}
+		} catch (err) {
+			node.error('Error closing connection: ' + err.message);
+		} finally {
+			done(); // Вызываем done() в finally, чтобы гарантировать его выполнение
+		}
 		});
 
     }
     RED.nodes.registerType("S-Tech-cloud", STechCloudConfigNode,{
 		credentials:{
 			host: {type: "text"},
-			port: {type: "text"},			
+			port: {type: "text"},
 			login:{type:"text"},
 			password:{type:"text"},
 			token:{type:"password"}
 		}
 	});
 }
-
-
-
