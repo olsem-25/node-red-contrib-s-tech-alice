@@ -277,7 +277,7 @@ module.exports = function(RED) {
 			}
 		});
 
-		function connect() {
+		async function connect() {
 
 			normalclose = false;
 
@@ -286,11 +286,36 @@ module.exports = function(RED) {
 			let url = "https://" + host + ":" + port + "/api/controller/websocket";
 			//let url = "https://s-tech-cloud.ru:8088/api/controller/websocket";
 
-			ws = new WebSocket(url, {
-				headers: {
-				'Authorization': token
-			}
+			try {
+			ws = await new Promise((resolve, reject) => {
+				const socket = new WebSocket(url, {
+					headers: { 'Authorization': token }
+				});
+
+				const timeoutId = setTimeout(() => {
+					node.emit("offline");
+					socket.close();
+					reject(new Error('WebSocket connection timeout'));
+				}, 5000);
+
+				socket.onopen = () => {
+					clearTimeout(timeoutId);
+					node.log("Connection to " + url + " established.");
+					resolve(socket);
+				};
+
+				socket.onerror = (error) => {
+					clearTimeout(timeoutId);
+					reject(error);
+				};
 			});
+			
+			// ws = new WebSocket(url, {
+			// 	headers: {
+			// 	'Authorization': token
+			// }
+			// });
+
 
 				ws.on('open', function open() {
 					node.emit("online");
@@ -355,7 +380,7 @@ module.exports = function(RED) {
 						if (code === 1008){
 							node.UpdateToken();
 						}
-						setTimeout(connect, 5000); // Переподключиться через 5 секунд после разрыва связи
+						setTimeout(connect, 10000); // Переподключиться через 10 секунд после разрыва связи
 					}
 				});
 
@@ -372,6 +397,12 @@ module.exports = function(RED) {
 					node.emit('offline');
 					node.error('Ошибка WebSocket: ' + error.toString());
 				});
+
+			} catch (error) {
+				node.emit("offline");
+				node.error("Connection failed: " + error.message);
+				setTimeout(connect, 10000);
+			}
 		};
 
 		node.UpdateToken = () =>{
@@ -402,6 +433,11 @@ module.exports = function(RED) {
 		};
 
 		node.UpdateStateDevice = (data) =>{
+			if ( ws == null || ws.readyState != WebSocket.OPEN ){
+				node.emit("offline");
+				node.log("Error sending cloud notification of state changes.");
+				return;
+			}
 			UpdateStateDevice.ts = Number(getTimestampInSeconds());
 			devfornotifi = [];
 			devfornotifi.push(data);
@@ -414,6 +450,11 @@ module.exports = function(RED) {
 		}
 
 		node.UpdateDevices = () =>{
+			if ( ws == null || ws.readyState != WebSocket.OPEN ){
+				node.emit("offline");
+				node.log("Error sending cloud notification about device settings change");
+				return;
+			}
 			UpdateDevices.ts = Number(getTimestampInSeconds());
 			let outmsg = {};
 			outmsg.command = "Callback Discovery";
