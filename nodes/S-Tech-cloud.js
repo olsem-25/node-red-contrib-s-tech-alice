@@ -359,6 +359,15 @@ module.exports = function(RED) {
 					}
 				});
 
+				ws.on('unexpected-response', (req, res) => {
+					if (res.statusCode === 401){
+						node.emit("offline");
+						node.log('WebSocket Error: Unexpected server response: 401');
+						node.UpdateToken();
+						ws.close();
+					}
+				});
+
 				ws.on('error', function (error) {
 					node.emit('offline');
 					node.error('Ошибка WebSocket: ' + error.toString());
@@ -367,23 +376,24 @@ module.exports = function(RED) {
 
 		node.UpdateToken = () =>{
 			node.log("Токен не работает. Обновляю токен.");
-			let url = "https://" + host + ":" + port + "/api/controller/create/token/update";
+			let url = "https://" + host + ":" + port + "/api/controller/create/token/updateJWTToken"; 
 			axios.post(url, {
 				user_id: login,
-				password: password
+				password: password,
+				jwtToken: token
 			})
 			.then(function (response) {
 				if (response.data.hasOwnProperty('jwtToken') === true){
 					node.log("Новый токен получен.");
 					token = response.data.jwtToken;
-					var wrdata = [];
+					var wrdata = []; 
 					wrdata.push({id: id, token: token});
-					wrdata = JSON.stringify(wrdata, null, 2);
-					fs.writeFile(tokenfile, wrdata, { encoding: 'utf8', flag: 'w' }, function(){});
-				}
+					wrdata = JSON.stringify(wrdata, null, 2); 
+					fs.writeFile(tokenfile, wrdata, { encoding: 'utf8', flag: 'w' }, function(){});	
+				}	
 			})
 			.catch(function (error) {
-				node.log(error);
+				node.log("Ошибка обновления токена. " + error);
 			});
 		}
 
